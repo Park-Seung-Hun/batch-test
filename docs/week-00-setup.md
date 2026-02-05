@@ -216,6 +216,11 @@ logging:
 
 ### EmbeddedPostgresConfig.java
 
+Docker 없이 PostgreSQL을 사용하기 위한 Embedded PostgreSQL 설정.
+- `@Configuration`: 스프링 설정 클래스로 등록
+- `@Bean DataSource`: Spring Batch와 JPA가 사용할 DB 연결 제공
+- `@PreDestroy`: 애플리케이션 종료 시 PostgreSQL 정리
+
 ```java
 package com.test.batchstudy.config;
 
@@ -237,13 +242,15 @@ public class EmbeddedPostgresConfig {
     @Bean
     public DataSource dataSource() throws IOException {
         log.info("Starting Embedded PostgreSQL...");
+        // 빌더 패턴으로 PostgreSQL 인스턴스 생성 및 시작
         embeddedPostgres = EmbeddedPostgres.builder()
                 .start();
         log.info("Embedded PostgreSQL started on port: {}", embeddedPostgres.getPort());
+        // Spring이 사용할 DataSource 반환
         return embeddedPostgres.getPostgresDatabase();
     }
 
-    @PreDestroy
+    @PreDestroy  // 애플리케이션 종료 시 자동 호출
     public void stop() throws IOException {
         if (embeddedPostgres != null) {
             log.info("Stopping Embedded PostgreSQL...");
@@ -254,6 +261,12 @@ public class EmbeddedPostgresConfig {
 ```
 
 ### HelloJobConfig.java
+
+Spring Batch Job 구성의 기본 구조: **Job → Step → Tasklet**
+- `Job`: 배치 작업의 최상위 단위. 여러 Step을 순차/조건부로 실행
+- `Step`: 실제 작업 단위. Tasklet 또는 Chunk(Reader-Processor-Writer) 방식
+- `Tasklet`: 단일 작업을 수행하는 가장 간단한 Step 구현 방식
+- `JobRepository`: Job/Step 실행 상태를 메타 테이블에 저장
 
 ```java
 package com.test.batchstudy.config;
@@ -277,25 +290,27 @@ public class HelloJobConfig {
     @Bean
     public Job helloJob(JobRepository jobRepository, Step helloStep) {
         return new JobBuilder("helloJob", jobRepository)
-                .start(helloStep)
+                .start(helloStep)  // 첫 번째 Step 지정
                 .build();
     }
 
     @Bean
     public Step helloStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
         return new StepBuilder("helloStep", jobRepository)
-                .tasklet(helloTasklet(), transactionManager)
+                .tasklet(helloTasklet(), transactionManager)  // Tasklet 방식 Step
                 .build();
     }
 
     @Bean
     public Tasklet helloTasklet() {
+        // contribution: Step 실행 결과에 기여하는 정보
+        // chunkContext: 청크 실행 컨텍스트 (Tasklet에서는 거의 사용 안 함)
         return (contribution, chunkContext) -> {
             log.info("========================================");
             log.info("Hello, Spring Batch!");
             log.info("Week 00 환경 세팅 완료!");
             log.info("========================================");
-            return RepeatStatus.FINISHED;
+            return RepeatStatus.FINISHED;  // 작업 완료, 반복 없음
         };
     }
 }
